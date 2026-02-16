@@ -87,7 +87,7 @@ if uploaded_file is not None:
     with col1:
         st.subheader("Original Image")
         original_image = Image.open(uploaded_file)
-        st.image(original_image, use_container_width=True)
+        st.image(original_image)
 
     with st.spinner("Detecting and Classifying..."):
 
