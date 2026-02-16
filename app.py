@@ -6,17 +6,18 @@ import io
 import os
 
 # =====================================
-# LOAD SECRETS (Cloud + Local fallback)
+# LOAD SECRETS (Cloud) OR .env (Local)
 # =====================================
 
-if "API_URL" in st.secrets:
+try:
     API_URL = st.secrets["API_URL"]
     API_KEY = st.secrets["API_KEY"]
-else:
+except Exception:
     from dotenv import load_dotenv
     load_dotenv()
     API_URL = os.getenv("API_URL")
     API_KEY = os.getenv("API_KEY")
+
 
 # =====================================
 # PAGE CONFIG
