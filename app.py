@@ -3,6 +3,17 @@ import requests
 import base64
 from PIL import Image
 import io
+import os
+from dotenv import load_dotenv
+
+# =====================================
+# LOAD ENV
+# =====================================
+
+load_dotenv()
+
+API_URL = os.getenv("API_URL")
+API_KEY = os.getenv("API_KEY")
 
 # =====================================
 # PAGE CONFIG
@@ -14,22 +25,21 @@ st.set_page_config(
     layout="wide"
 )
 
-API_URL = "https://armia-gamal-plant-disease-api.hf.space/detect_and_classify"
-
 # =====================================
 # SIDEBAR
 # =====================================
 
 st.sidebar.title("🍃 About The Project")
-st.sidebar.image("img.png" , width=300)
+st.sidebar.image("img.png", width=300)
+
 st.sidebar.markdown("""
 ### 🌱 Plant Disease Detection System
 
 This system uses:
 
--  YOLOv8x4 for Leaf Detection  
--  CNN for Disease Classification  
--  102 Plant Disease Classes  
+- YOLOv8x4 for Leaf Detection  
+- CNN for Disease Classification  
+- 102 Plant Disease Classes  
 
 The model can detect and classify:
 - Different crops
@@ -37,25 +47,19 @@ The model can detect and classify:
 - Multiple plant diseases
 
 ---
-### Want Test Images?
 
-If you don’t have plant images to test,  
-you can download sample test images from Kaggle:
+### 🧪 Want Test Images?
 
-👉 [Download Test Dataset Here](https://www.kaggle.com/datasets/armia123/plant-leaf-disease-classification?select=test)
+Download sample test images from Kaggle:
 
-After downloading:
-1. Open the **test** folder  
-2. Choose any image  
-3. Upload it here  
+👉 https://www.kaggle.com/datasets/armia123/plant-leaf-disease-classification?select=test
+
 ---
 
 ### 👩‍💻 Developers
-- **Armia Gamal**
-- **Sara Essam**
+- Armia Gamal
+- Sara Essam
 """)
-
-
 
 st.sidebar.markdown("---")
 st.sidebar.info("Upload a plant image to start detection.")
@@ -72,7 +76,7 @@ st.markdown("AI-powered detection & classification with **102 classes**")
 # =====================================
 
 uploaded_file = st.file_uploader(
-    " Upload Plant Image",
+    "Upload Plant Image",
     type=["jpg", "jpeg", "png"]
 )
 
@@ -81,11 +85,11 @@ if uploaded_file is not None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader(" Original Image")
+        st.subheader("Original Image")
         original_image = Image.open(uploaded_file)
         st.image(original_image, use_container_width=True)
 
-    with st.spinner(" Detecting and Classifying..."):
+    with st.spinner("Detecting and Classifying..."):
 
         files = {
             "file": (
@@ -95,7 +99,15 @@ if uploaded_file is not None:
             )
         }
 
-        response = requests.post(API_URL, files=files)
+        headers = {
+            "Authorization": f"Bearer {API_KEY}"
+        }
+
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            files=files
+        )
 
         if response.status_code != 200:
             st.error("API Error")
@@ -109,7 +121,7 @@ if uploaded_file is not None:
     # =====================================
 
     with col2:
-        st.subheader(" Annotated Image")
+        st.subheader("Annotated Image")
 
         annotated_b64 = data.get("annotated_image")
 
@@ -125,20 +137,16 @@ if uploaded_file is not None:
     # =====================================
 
     st.divider()
-    st.subheader(" Classification Results")
+    st.subheader("Classification Results")
 
     results = data.get("results", [])
 
     if results:
-
         formatted_results = []
 
         for r in results:
 
             confidence_value = float(r["confidence"].replace('%','')) / 100
-
-            # Apply threshold from sidebar
-
 
             crop_name = r["crop"]
             disease = r["disease"]
@@ -147,11 +155,7 @@ if uploaded_file is not None:
             x1, y1, x2, y2 = r["x1"], r["y1"], r["x2"], r["y2"]
             crop_img = original_image.crop((x1, y1, x2, y2))
 
-            # Color based on health
-            if disease.lower() == "healthy":
-                color = "green"
-            else:
-                color = "red"
+            color = "green" if disease.lower() == "healthy" else "red"
 
             st.markdown(f"""
             <h3 style='color:{color};'>
@@ -172,11 +176,8 @@ if uploaded_file is not None:
                 "Confidence": confidence
             })
 
-        if formatted_results:
-            st.subheader("📊 Summary Table")
-            st.dataframe(formatted_results, use_container_width=True)
-        else:
-            st.warning("No results passed the selected confidence threshold.")
+        st.subheader("📊 Summary Table")
+        st.dataframe(formatted_results, use_container_width=True)
 
     else:
         st.warning("No objects detected.")
