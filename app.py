@@ -3,6 +3,7 @@ import requests
 import base64
 from PIL import Image
 import io
+import numpy as np
 
 # =====================================
 # API CONFIG (HARDCODED)
@@ -26,7 +27,6 @@ st.set_page_config(
 # =====================================
 
 st.sidebar.title("🍃 About The Project")
-st.sidebar.image("img.png", width=250)
 
 st.sidebar.markdown("""
 ### 🌱 Plant Disease Detection System
@@ -79,18 +79,22 @@ uploaded_file = st.file_uploader(
     type=["jpg", "jpeg", "png"]
 )
 
-if uploaded_file:
+if uploaded_file is not None:
 
     col1, col2 = st.columns(2)
 
     # =====================================
-    # SHOW ORIGINAL IMAGE
+    # SHOW ORIGINAL IMAGE (SAFE)
     # =====================================
 
     with col1:
         st.subheader("Original Image")
+
+        uploaded_file.seek(0)  # مهم جدًا
         original_image = Image.open(uploaded_file).convert("RGB")
-        st.image(original_image, use_container_width=True)
+        original_np = np.array(original_image)
+
+        st.image(original_np, width=500)
 
     # =====================================
     # CALL API
@@ -115,18 +119,23 @@ if uploaded_file:
                 API_URL,
                 headers=headers,
                 files=files,
-                timeout=60
+                timeout=120
             )
 
             response.raise_for_status()
             data = response.json()
 
         except requests.exceptions.Timeout:
-            st.error("⏳ Request timed out. The model may be loading.")
+            st.error("⏳ Request timed out. Model might be loading.")
             st.stop()
 
         except requests.exceptions.RequestException as e:
             st.error("❌ API connection failed.")
+            st.text(str(e))
+            st.stop()
+
+        except Exception as e:
+            st.error("Unexpected Error")
             st.text(str(e))
             st.stop()
 
@@ -140,9 +149,15 @@ if uploaded_file:
         annotated_b64 = data.get("annotated_image")
 
         if annotated_b64:
-            annotated_bytes = base64.b64decode(annotated_b64)
-            annotated_img = Image.open(io.BytesIO(annotated_bytes))
-            st.image(annotated_img, use_container_width=True)
+            try:
+                annotated_bytes = base64.b64decode(annotated_b64)
+                annotated_img = Image.open(io.BytesIO(annotated_bytes)).convert("RGB")
+                annotated_np = np.array(annotated_img)
+
+                st.image(annotated_np, width=500)
+
+            except Exception:
+                st.warning("Annotated image decoding failed.")
         else:
             st.warning("No annotated image returned.")
 
@@ -160,20 +175,27 @@ if uploaded_file:
 
         for r in results:
 
-            confidence_value = float(
-                str(r.get("confidence", "0")).replace('%','')
-            ) / 100
+            confidence_raw = str(r.get("confidence", "0")).replace('%','')
+
+            try:
+                confidence_value = float(confidence_raw) / 100
+            except:
+                confidence_value = 0.0
 
             crop_name = r.get("crop", "Unknown")
             disease = r.get("disease", "Unknown")
             confidence = r.get("confidence", "0%")
 
-            x1 = r.get("x1", 0)
-            y1 = r.get("y1", 0)
-            x2 = r.get("x2", 0)
-            y2 = r.get("y2", 0)
+            x1 = int(r.get("x1", 0))
+            y1 = int(r.get("y1", 0))
+            x2 = int(r.get("x2", 0))
+            y2 = int(r.get("y2", 0))
 
-            crop_img = original_image.crop((x1, y1, x2, y2))
+            if x2 > x1 and y2 > y1:
+                crop_img = original_image.crop((x1, y1, x2, y2))
+                crop_np = np.array(crop_img)
+            else:
+                crop_np = original_np
 
             color = "green" if disease.lower() == "healthy" else "red"
 
@@ -185,7 +207,7 @@ if uploaded_file:
             <b>Confidence:</b> {confidence}
             """, unsafe_allow_html=True)
 
-            st.image(crop_img, width=300)
+            st.image(crop_np, width=300)
             st.progress(confidence_value)
             st.divider()
 
