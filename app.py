@@ -128,7 +128,8 @@ if uploaded_file is not None:
         if annotated_b64:
             annotated_bytes = base64.b64decode(annotated_b64)
             annotated_img = Image.open(io.BytesIO(annotated_bytes))
-            st.image(annotated_img, use_container_width=True)
+            st.image(annotated_img)
+
         else:
             st.warning("No annotated image returned.")
 
