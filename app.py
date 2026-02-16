@@ -3,21 +3,13 @@ import requests
 import base64
 from PIL import Image
 import io
-import os
 
 # =====================================
-# LOAD SECRETS (Cloud) OR .env (Local)
+# API CONFIG (HARDCODED)
 # =====================================
 
-try:
-    API_URL = st.secrets["API_URL"]
-    API_KEY = st.secrets["API_KEY"]
-except Exception:
-    from dotenv import load_dotenv
-    load_dotenv()
-    API_URL = os.getenv("API_URL")
-    API_KEY = os.getenv("API_KEY")
-
+API_URL = "https://armia-gamal-plant-disease-api.hf.space/detect_and_classify"
+API_KEY = "secret123"
 
 # =====================================
 # PAGE CONFIG
@@ -45,7 +37,7 @@ This system uses:
 - CNN for Disease Classification  
 - 102 Plant Disease Classes  
 
-The model can detect:
+The model can detect and classify:
 - Different crops
 - Healthy leaves
 - Multiple plant diseases
@@ -56,11 +48,16 @@ The model can detect:
 
 👉 https://www.kaggle.com/datasets/armia123/plant-leaf-disease-classification?select=test
 
+After downloading:
+1. Open the **test** folder  
+2. Choose any image  
+3. Upload it here  
+
 ---
 
 ### 👩‍💻 Developers
-- Armia Gamal
-- Sara Essam
+- **Armia Gamal**
+- **Sara Essam**
 """)
 
 st.sidebar.markdown("---")
@@ -84,18 +81,22 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    if not API_URL or not API_KEY:
-        st.error("API configuration missing. Check Secrets settings.")
-        st.stop()
-
     col1, col2 = st.columns(2)
+
+    # =====================================
+    # SHOW ORIGINAL IMAGE
+    # =====================================
 
     with col1:
         st.subheader("Original Image")
         original_image = Image.open(uploaded_file).convert("RGB")
-        st.image(original_image)
+        st.image(original_image, use_container_width=True)
 
-    with st.spinner("Detecting and Classifying..."):
+    # =====================================
+    # CALL API
+    # =====================================
+
+    with st.spinner("🔍 Detecting and Classifying..."):
 
         try:
             files = {
@@ -120,8 +121,12 @@ if uploaded_file:
             response.raise_for_status()
             data = response.json()
 
+        except requests.exceptions.Timeout:
+            st.error("⏳ Request timed out. The model may be loading.")
+            st.stop()
+
         except requests.exceptions.RequestException as e:
-            st.error("API connection failed.")
+            st.error("❌ API connection failed.")
             st.text(str(e))
             st.stop()
 
@@ -137,7 +142,7 @@ if uploaded_file:
         if annotated_b64:
             annotated_bytes = base64.b64decode(annotated_b64)
             annotated_img = Image.open(io.BytesIO(annotated_bytes))
-            st.image(annotated_img)
+            st.image(annotated_img, use_container_width=True)
         else:
             st.warning("No annotated image returned.")
 
@@ -155,13 +160,19 @@ if uploaded_file:
 
         for r in results:
 
-            confidence_value = float(r["confidence"].replace('%','')) / 100
+            confidence_value = float(
+                str(r.get("confidence", "0")).replace('%','')
+            ) / 100
 
-            crop_name = r["crop"]
-            disease = r["disease"]
-            confidence = r["confidence"]
+            crop_name = r.get("crop", "Unknown")
+            disease = r.get("disease", "Unknown")
+            confidence = r.get("confidence", "0%")
 
-            x1, y1, x2, y2 = r["x1"], r["y1"], r["x2"], r["y2"]
+            x1 = r.get("x1", 0)
+            y1 = r.get("y1", 0)
+            x2 = r.get("x2", 0)
+            y2 = r.get("y2", 0)
+
             crop_img = original_image.crop((x1, y1, x2, y2))
 
             color = "green" if disease.lower() == "healthy" else "red"
@@ -179,7 +190,7 @@ if uploaded_file:
             st.divider()
 
             formatted_results.append({
-                "Box": r["Box"],
+                "Box": r.get("Box", ""),
                 "Crop": crop_name,
                 "Disease": disease,
                 "Confidence": confidence
