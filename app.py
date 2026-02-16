@@ -4,16 +4,19 @@ import base64
 from PIL import Image
 import io
 import os
-from dotenv import load_dotenv
 
 # =====================================
-# LOAD ENV
+# LOAD SECRETS (Cloud + Local fallback)
 # =====================================
 
-load_dotenv()
-
-API_URL = os.getenv("API_URL")
-API_KEY = os.getenv("API_KEY")
+if "API_URL" in st.secrets:
+    API_URL = st.secrets["API_URL"]
+    API_KEY = st.secrets["API_KEY"]
+else:
+    from dotenv import load_dotenv
+    load_dotenv()
+    API_URL = os.getenv("API_URL")
+    API_KEY = os.getenv("API_KEY")
 
 # =====================================
 # PAGE CONFIG
@@ -30,7 +33,7 @@ st.set_page_config(
 # =====================================
 
 st.sidebar.title("🍃 About The Project")
-st.sidebar.image("img.png", width=300)
+st.sidebar.image("img.png", width=250)
 
 st.sidebar.markdown("""
 ### 🌱 Plant Disease Detection System
@@ -41,7 +44,7 @@ This system uses:
 - CNN for Disease Classification  
 - 102 Plant Disease Classes  
 
-The model can detect and classify:
+The model can detect:
 - Different crops
 - Healthy leaves
 - Multiple plant diseases
@@ -49,8 +52,6 @@ The model can detect and classify:
 ---
 
 ### 🧪 Want Test Images?
-
-Download sample test images from Kaggle:
 
 👉 https://www.kaggle.com/datasets/armia123/plant-leaf-disease-classification?select=test
 
@@ -80,41 +81,48 @@ uploaded_file = st.file_uploader(
     type=["jpg", "jpeg", "png"]
 )
 
-if uploaded_file is not None:
+if uploaded_file:
+
+    if not API_URL or not API_KEY:
+        st.error("API configuration missing. Check Secrets settings.")
+        st.stop()
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("Original Image")
-        original_image = Image.open(uploaded_file)
+        original_image = Image.open(uploaded_file).convert("RGB")
         st.image(original_image)
 
     with st.spinner("Detecting and Classifying..."):
 
-        files = {
-            "file": (
-                uploaded_file.name,
-                uploaded_file.getvalue(),
-                uploaded_file.type
+        try:
+            files = {
+                "file": (
+                    uploaded_file.name,
+                    uploaded_file.getvalue(),
+                    uploaded_file.type
+                )
+            }
+
+            headers = {
+                "Authorization": f"Bearer {API_KEY}"
+            }
+
+            response = requests.post(
+                API_URL,
+                headers=headers,
+                files=files,
+                timeout=60
             )
-        }
 
-        headers = {
-            "Authorization": f"Bearer {API_KEY}"
-        }
+            response.raise_for_status()
+            data = response.json()
 
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            files=files
-        )
-
-        if response.status_code != 200:
-            st.error("API Error")
-            st.text(response.text)
+        except requests.exceptions.RequestException as e:
+            st.error("API connection failed.")
+            st.text(str(e))
             st.stop()
-
-        data = response.json()
 
     # =====================================
     # Annotated Image
@@ -129,7 +137,6 @@ if uploaded_file is not None:
             annotated_bytes = base64.b64decode(annotated_b64)
             annotated_img = Image.open(io.BytesIO(annotated_bytes))
             st.image(annotated_img)
-
         else:
             st.warning("No annotated image returned.")
 
